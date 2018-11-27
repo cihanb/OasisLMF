@@ -1,3 +1,4 @@
+argcomplete==1.9.4
 argparsetree==0.0.5
 backports.tempfile
 backports.weakref
