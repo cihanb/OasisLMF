@@ -35,9 +35,9 @@ from hypothesis.strategies import (
 )
 from mock import patch, Mock
 
-from oasislmf.exposures.manager import OasisExposuresManager
+from oasislmf.exposure.manager import OasisExposureManager
 from oasislmf.models.model import OasisModel
-from oasislmf.exposures.pipeline import OasisFilesPipeline
+from oasislmf.exposure.pipeline import OasisFilesPipeline
 
 from oasislmf.utils.exceptions import OasisException
 from oasislmf.utils.fm import (
@@ -48,6 +48,8 @@ from oasislmf.utils.metadata import (
     OASIS_FM_LEVELS,
     OASIS_KEYS_STATUS,
     OASIS_PERILS,
+    OED_COVERAGE_TYPES,
+    OED_PERILS,
 )
 
 from ..models.fakes import fake_model
@@ -72,9 +74,66 @@ from ..data import (
 )
 
 
+class AddModel(TestCase):
+
+    def test_models_is_empty___model_is_added_to_model_dict(self):
+        model = fake_model('supplier', 'model', 'version')
+
+        manager = OasisExposureManager()
+        manager.add_model(model)
+
+        self.assertEqual({model.key: model}, manager.models)
+
+    def test_manager_already_contains_a_model_with_the_given_key___model_is_replaced_in_models_dict(self):
+        first = fake_model('supplier', 'model', 'version')
+        second = fake_model('supplier', 'model', 'version')
+
+        manager = OasisExposureManager(oasis_models=[first])
+        manager.add_model(second)
+
+        self.assertIs(second, manager.models[second.key])
+
+    def test_manager_already_contains_a_diferent_model___model_is_added_to_dict(self):
+        first = fake_model('first', 'model', 'version')
+        second = fake_model('second', 'model', 'version')
+
+        manager = OasisExposureManager(oasis_models=[first])
+        manager.add_model(second)
+
+        self.assertEqual({
+            first.key: first,
+            second.key: second,
+        }, manager.models)
+
+
+class DeleteModels(TestCase):
+    def test_models_is_not_in_manager___no_model_is_removed(self):
+        manager = OasisExposureManager([
+            fake_model('supplier', 'model', 'version'),
+            fake_model('supplier2', 'model2', 'version2'),
+        ])
+        expected = manager.models
+
+        manager.delete_models([fake_model('supplier3', 'model3', 'version3')])
+
+        self.assertEqual(expected, manager.models)
+
+    def test_models_exist_in_manager___models_are_removed(self):
+        models = [
+            fake_model('supplier', 'model', 'version'),
+            fake_model('supplier2', 'model2', 'version2'),
+            fake_model('supplier3', 'model3', 'version3'),
+        ]
+
+        manager = OasisExposureManager(models)
+        manager.delete_models(models[1:])
+
+        self.assertEqual({models[0].key: models[0]}, manager.models)
+
+
 class LoadCanonicalExposuresProfile(TestCase):
     def test_model_and_kwargs_are_not_set___result_is_null(self):
-        profile = OasisExposuresManager().load_canonical_exposures_profile()
+        profile = OasisExposureManager().load_canonical_exposures_profile()
 
         self.assertEqual(None, profile)
 
@@ -82,7 +141,7 @@ class LoadCanonicalExposuresProfile(TestCase):
     def test_model_is_set_with_profile_json___models_profile_is_set_to_expected_json(self, expected):
         model = fake_model(resources={'canonical_exposures_profile_json': json.dumps(expected)})
 
-        profile = OasisExposuresManager().load_canonical_exposures_profile(oasis_model=model)
+        profile = OasisExposureManager().load_canonical_exposures_profile(oasis_model=model)
 
         self.assertEqual(expected, profile)
         self.assertEqual(expected, model.resources['canonical_exposures_profile'])
@@ -95,7 +154,7 @@ class LoadCanonicalExposuresProfile(TestCase):
     ):
         model = fake_model(resources={'canonical_exposures_profile_json': json.dumps(model_profile)})
 
-        profile = OasisExposuresManager().load_canonical_exposures_profile(oasis_model=model, canonical_exposures_profile_json=json.dumps(kwargs_profile))
+        profile = OasisExposureManager().load_canonical_exposures_profile(oasis_model=model, canonical_exposures_profile_json=json.dumps(kwargs_profile))
 
         self.assertEqual(kwargs_profile, profile)
         self.assertEqual(kwargs_profile, model.resources['canonical_exposures_profile'])
@@ -108,7 +167,7 @@ class LoadCanonicalExposuresProfile(TestCase):
 
             model = fake_model(resources={'canonical_exposures_profile_json_path': f.name})
 
-            profile = OasisExposuresManager().load_canonical_exposures_profile(oasis_model=model)
+            profile = OasisExposureManager().load_canonical_exposures_profile(oasis_model=model)
 
             self.assertEqual(expected, profile)
             self.assertEqual(expected, model.resources['canonical_exposures_profile'])
@@ -128,7 +187,7 @@ class LoadCanonicalExposuresProfile(TestCase):
 
             model = fake_model(resources={'canonical_exposures_profile_json_path': model_file.name})
 
-            profile = OasisExposuresManager().load_canonical_exposures_profile(oasis_model=model, canonical_exposures_profile_json_path=kwargs_file.name)
+            profile = OasisExposureManager().load_canonical_exposures_profile(oasis_model=model, canonical_exposures_profile_json_path=kwargs_file.name)
 
             self.assertEqual(kwargs_profile, profile)
             self.assertEqual(kwargs_profile, model.resources['canonical_exposures_profile'])
@@ -166,8 +225,8 @@ class CreateModel(TestCase):
     ):
         model = self.create_model(lookup=lookup, keys_file_path=keys_file_path, keys_errors_file_path=keys_errors_file_path, model_exposures_file_path=exposures_file_path)
 
-        with patch('oasislmf.exposures.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_file_path, 1, keys_errors_file_path, 1))) as oklf_mock:
-            res_keys_file_path, res_keys_errors_file_path = OasisExposuresManager().get_keys(oasis_model=model)
+        with patch('oasislmf.exposure.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_file_path, 1, keys_errors_file_path, 1))) as oklf_mock:
+            res_keys_file_path, res_keys_errors_file_path = OasisExposureManager().get_keys(oasis_model=model)
 
             oklf_mock.assert_called_once_with(
                 lookup,
@@ -213,12 +272,12 @@ class CreateModel(TestCase):
             'keys_errors_file_path': model_keys_errors_fp,
             'model_exposures_file_path': model_exposures_fp
         }
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version, resources=resources)
 
         expected_key = '{}/{}/{}'.format(supplier_id, model_id, version)
 
-        with patch('oasislmf.exposures.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_fp, 1, keys_errors_fp, 1))) as oklf_mock:
-            res_keys_file_path, res_keys_errors_file_path = OasisExposuresManager().get_keys(
+        with patch('oasislmf.exposure.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_fp, 1, keys_errors_fp, 1))) as oklf_mock:
+            res_keys_file_path, res_keys_errors_file_path = OasisExposureManager().get_keys(
                 oasis_model=model,
                 lookup=lookup,
                 model_exposures_file_path=exposures_fp,
@@ -266,7 +325,7 @@ class CreateModel(TestCase):
 
         resources={'oasis_files_path': oasis_files_path}
 
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -296,7 +355,7 @@ class CreateModel(TestCase):
 
         resources={'canonical_exposures_profile': canonical_exposures_profile}
 
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -328,7 +387,7 @@ class CreateModel(TestCase):
 
         resources={'oasis_files_path': oasis_files_path, 'canonical_exposures_profile': canonical_exposures_profile}
 
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -360,7 +419,7 @@ class CreateModel(TestCase):
 
         resources={'oasis_files_path': os.path.abspath(oasis_files_path), 'canonical_exposures_profile': canonical_exposures_profile}
 
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -389,7 +448,7 @@ class CreateModel(TestCase):
 
         resources={'source_accounts_file_path': source_accounts_file_path}
         
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -424,7 +483,7 @@ class CreateModel(TestCase):
 
         resources={'source_accounts_file_path': source_accounts_file_path, 'canonical_accounts_profile': canonical_accounts_profile}
         
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -466,7 +525,7 @@ class CreateModel(TestCase):
             'canonical_accounts_profile': canonical_accounts_profile
         }
         
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -511,7 +570,7 @@ class CreateModel(TestCase):
             'canonical_accounts_profile': canonical_accounts_profile
         }
         
-        model = OasisExposuresManager().create_model(supplier_id, model_id, version_id, resources=resources)
+        model = OasisExposureManager().create_model(supplier_id, model_id, version_id, resources=resources)
 
         self.assertTrue(isinstance(model, OasisModel))
 
@@ -530,7 +589,7 @@ class CreateModel(TestCase):
 
 class LoadCanonicalAccountsProfile(TestCase):
     def test_model_and_kwargs_are_not_set___result_is_null(self):
-        profile = OasisExposuresManager().load_canonical_accounts_profile()
+        profile = OasisExposureManager().load_canonical_accounts_profile()
 
         self.assertEqual(None, profile)
 
@@ -538,7 +597,7 @@ class LoadCanonicalAccountsProfile(TestCase):
     def test_model_is_set_with_profile_json___models_profile_is_set_to_expected_json(self, expected):
         model = fake_model(resources={'canonical_accounts_profile_json': json.dumps(expected)})
 
-        profile = OasisExposuresManager().load_canonical_accounts_profile(oasis_model=model)
+        profile = OasisExposureManager().load_canonical_accounts_profile(oasis_model=model)
 
         self.assertEqual(expected, profile)
         self.assertEqual(expected, model.resources['canonical_accounts_profile'])
@@ -551,7 +610,7 @@ class LoadCanonicalAccountsProfile(TestCase):
     ):
         model = fake_model(resources={'canonical_accounts_profile_json': json.dumps(model_profile)})
 
-        profile = OasisExposuresManager().load_canonical_accounts_profile(oasis_model=model, canonical_accounts_profile_json=json.dumps(kwargs_profile))
+        profile = OasisExposureManager().load_canonical_accounts_profile(oasis_model=model, canonical_accounts_profile_json=json.dumps(kwargs_profile))
 
         self.assertEqual(kwargs_profile, profile)
         self.assertEqual(kwargs_profile, model.resources['canonical_accounts_profile'])
@@ -564,7 +623,7 @@ class LoadCanonicalAccountsProfile(TestCase):
 
             model = fake_model(resources={'canonical_accounts_profile_json_path': f.name})
 
-            profile = OasisExposuresManager().load_canonical_accounts_profile(oasis_model=model)
+            profile = OasisExposureManager().load_canonical_accounts_profile(oasis_model=model)
 
             self.assertEqual(expected, profile)
             self.assertEqual(expected, model.resources['canonical_accounts_profile'])
@@ -583,7 +642,7 @@ class LoadCanonicalAccountsProfile(TestCase):
 
             model = fake_model(resources={'canonical_accounts_profile_json_path': model_file.name})
 
-            profile = OasisExposuresManager().load_canonical_accounts_profile(oasis_model=model, canonical_accounts_profile_json_path=kwargs_file.name)
+            profile = OasisExposureManager().load_canonical_accounts_profile(oasis_model=model, canonical_accounts_profile_json_path=kwargs_file.name)
 
             self.assertEqual(kwargs_profile, profile)
             self.assertEqual(kwargs_profile, model.resources['canonical_accounts_profile'])
@@ -594,7 +653,7 @@ class LoadFmAggregationProfile(TestCase):
         self.profile = oasis_fm_agg_profile
 
     def test_model_and_kwargs_are_not_set___result_is_null(self):
-        profile = OasisExposuresManager().load_fm_aggregation_profile()
+        profile = OasisExposureManager().load_fm_aggregation_profile()
 
         self.assertEqual(None, profile)
 
@@ -603,7 +662,7 @@ class LoadFmAggregationProfile(TestCase):
         profile_json = json.dumps(self.profile)
         model = fake_model(resources={'fm_agg_profile_json': profile_json})
 
-        profile = OasisExposuresManager().load_fm_aggregation_profile(oasis_model=model)
+        profile = OasisExposureManager().load_fm_aggregation_profile(oasis_model=model)
 
 
         self.assertEqual(expected, profile)
@@ -612,7 +671,7 @@ class LoadFmAggregationProfile(TestCase):
     def test_model_is_set_with_profile_json_and_profile_json_is_passed_through_kwargs___kwargs_profile_is_used(self):
         model = fake_model(resources={'fm_agg_profile_json': json.dumps(self.profile)})
 
-        profile = OasisExposuresManager().load_fm_aggregation_profile(oasis_model=model, fm_agg_profile_json=json.dumps(self.profile))
+        profile = OasisExposureManager().load_fm_aggregation_profile(oasis_model=model, fm_agg_profile_json=json.dumps(self.profile))
 
         self.assertEqual(self.profile, profile)
         self.assertEqual(self.profile, model.resources['fm_agg_profile'])
@@ -626,7 +685,7 @@ class LoadFmAggregationProfile(TestCase):
 
             model = fake_model(resources={'fm_agg_profile_path': f.name})
 
-            profile = OasisExposuresManager().load_fm_aggregation_profile(oasis_model=model)
+            profile = OasisExposureManager().load_fm_aggregation_profile(oasis_model=model)
 
             self.assertEqual(expected, profile)
             self.assertEqual(expected, model.resources['fm_agg_profile'])
@@ -642,7 +701,7 @@ class LoadFmAggregationProfile(TestCase):
 
             model = fake_model(resources={'fm_agg_profile_path': model_file.name})
 
-            profile = OasisExposuresManager().load_fm_aggregation_profile(oasis_model=model, fm_agg_profile_path=kwargs_file.name)
+            profile = OasisExposureManager().load_fm_aggregation_profile(oasis_model=model, fm_agg_profile_path=kwargs_file.name)
 
             self.assertEqual(self.profile, profile)
             self.assertEqual(self.profile, model.resources['fm_agg_profile'])
@@ -664,8 +723,8 @@ class TransformSourceToCanonical(TestCase):
             canonical_exposures_file_path
     ):
         trans_call_mock = Mock()
-        with patch('oasislmf.exposures.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
-            OasisExposuresManager().transform_source_to_canonical(
+        with patch('oasislmf.exposure.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
+            OasisExposureManager().transform_source_to_canonical(
                 source_exposures_file_path=source_exposures_file_path,
                 source_to_canonical_exposures_transformation_file_path=source_to_canonical_exposures_transformation_file_path,
                 canonical_exposures_file_path=canonical_exposures_file_path
@@ -701,8 +760,8 @@ class TransformSourceToCanonical(TestCase):
         model.resources['oasis_files_pipeline'].canonical_exposures_path = canonical_exposures_file_path
 
         trans_call_mock = Mock()
-        with patch('oasislmf.exposures.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
-            OasisExposuresManager().transform_source_to_canonical(
+        with patch('oasislmf.exposure.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
+            OasisExposureManager().transform_source_to_canonical(
                 source_exposures_file_path=source_exposures_file_path,
                 source_to_canonical_exposures_transformation_file_path=source_to_canonical_exposures_transformation_file_path,
                 canonical_exposures_file_path=canonical_exposures_file_path
@@ -733,8 +792,8 @@ class TransformCanonicalToModel(TestCase):
             model_exposures_file_path):
 
         trans_call_mock = Mock()
-        with patch('oasislmf.exposures.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
-            OasisExposuresManager().transform_canonical_to_model(
+        with patch('oasislmf.exposure.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
+            OasisExposureManager().transform_canonical_to_model(
                 canonical_exposures_file_path=canonical_exposures_file_path,
                 canonical_to_model_exposures_transformation_file_path=canonical_to_model_exposures_transformation_file_path,
                 model_exposures_file_path=model_exposures_file_path,
@@ -770,8 +829,8 @@ class TransformCanonicalToModel(TestCase):
         model.resources['oasis_files_pipeline'].model_exposures_file_path = model_exposures_file_path
 
         trans_call_mock = Mock()
-        with patch('oasislmf.exposures.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
-            OasisExposuresManager().transform_canonical_to_model(
+        with patch('oasislmf.exposure.manager.Translator', Mock(return_value=trans_call_mock)) as trans_mock:
+            OasisExposureManager().transform_canonical_to_model(
                 canonical_exposures_file_path=canonical_exposures_file_path,
                 canonical_to_model_exposures_transformation_file_path=canonical_to_model_exposures_transformation_file_path,
                 model_exposures_file_path=model_exposures_file_path,
@@ -816,8 +875,8 @@ class GetKeys(TestCase):
     ):
         model = self.create_model(lookup=lookup, keys_file_path=keys_file_path, keys_errors_file_path=keys_errors_file_path, model_exposures_file_path=exposures_file_path)
 
-        with patch('oasislmf.exposures.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_file_path, 1, keys_errors_file_path, 1))) as oklf_mock:
-            res_keys_file_path, res_keys_errors_file_path = OasisExposuresManager().get_keys(oasis_model=model)
+        with patch('oasislmf.exposure.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_file_path, 1, keys_errors_file_path, 1))) as oklf_mock:
+            res_keys_file_path, res_keys_errors_file_path = OasisExposureManager().get_keys(oasis_model=model)
 
             oklf_mock.assert_called_once_with(
                 lookup,
@@ -853,8 +912,8 @@ class GetKeys(TestCase):
     ):
         model = self.create_model(lookup=model_lookup, keys_file_path=model_keys_fp, keys_errors_file_path=model_keys_errors_fp, model_exposures_file_path=model_exposures_fp)
 
-        with patch('oasislmf.exposures.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_fp, 1, keys_errors_fp, 1))) as oklf_mock:
-            res_keys_file_path, res_keys_errors_file_path = OasisExposuresManager().get_keys(
+        with patch('oasislmf.exposure.manager.OasisLookupFactory.save_results', Mock(return_value=(keys_fp, 1, keys_errors_fp, 1))) as oklf_mock:
+            res_keys_file_path, res_keys_errors_file_path = OasisExposureManager().get_keys(
                 oasis_model=model,
                 lookup=lookup,
                 model_exposures_file_path=exposures_fp,
@@ -902,7 +961,7 @@ class LoadGulItems(TestCase):
             write_keys_files(keys, keys_file.name)
 
             with self.assertRaises(OasisException):
-                OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+                OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
     @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(
@@ -921,7 +980,7 @@ class LoadGulItems(TestCase):
             write_keys_files(keys, keys_file.name)
 
             with self.assertRaises(OasisException):
-                OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+                OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
     @pytest.mark.flaky
     @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
@@ -941,7 +1000,7 @@ class LoadGulItems(TestCase):
             write_keys_files(keys, keys_file.name)
 
             with self.assertRaises(OasisException):
-                OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+                OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
     @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(
@@ -964,7 +1023,7 @@ class LoadGulItems(TestCase):
             write_keys_files(keys, keys_file.name)
 
             with self.assertRaises(OasisException):
-                OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+                OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
     @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(
@@ -988,7 +1047,7 @@ class LoadGulItems(TestCase):
             write_keys_files(keys, keys_file.name)
 
             with self.assertRaises(OasisException):
-                OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+                OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
     @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(
@@ -1010,7 +1069,7 @@ class LoadGulItems(TestCase):
             write_keys_files(keys, keys_file.name)
 
             with self.assertRaises(OasisException):
-                OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+                OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
     @pytest.mark.flaky
     @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
@@ -1039,7 +1098,7 @@ class LoadGulItems(TestCase):
 
             matching_canonical_and_keys_item_ids = set(k['id'] for k in keys).intersection([e['row_id'] for e in exposures])
 
-            gul_items_df, canexp_df = OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+            gul_items_df, canexp_df = OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
         get_canonical_item = lambda i: (
             [e for e in exposures if e['row_id'] == i + 1][0] if len([e for e in exposures if e['row_id'] == i + 1]) == 1
@@ -1146,7 +1205,7 @@ class LoadGulItems(TestCase):
 
             matching_canonical_and_keys_item_ids = set(k['id'] for k in keys).intersection([e['row_id'] for e in exposures])
 
-            gul_items_df, canexp_df = OasisExposuresManager().load_gul_items(profile, exposures_file.name, keys_file.name)
+            gul_items_df, canexp_df = OasisExposureManager().load_gul_items(profile, exposures_file.name, keys_file.name)
 
         self.assertEqual(len(gul_items_df), 6)
         self.assertEqual(len(canexp_df), 2)
@@ -1251,7 +1310,7 @@ class LoadFmItems(TestCase):
             write_canonical_files(accounts, accounts_file.name)
 
             with self.assertRaises(OasisException):
-                fm_df, canacc_df = OasisExposuresManager().load_fm_items(
+                fm_df, canacc_df = OasisExposureManager().load_fm_items(
                     pd.DataFrame(data=exposures),
                     pd.DataFrame(data=guls),
                     cep,
@@ -1278,7 +1337,7 @@ class LoadFmItems(TestCase):
             write_canonical_files(canonical_accounts=[], canonical_accounts_file_path=accounts_file.name)
 
             with self.assertRaises(OasisException):
-                fm_df, canacc_df = OasisExposuresManager().load_fm_items(
+                fm_df, canacc_df = OasisExposureManager().load_fm_items(
                     pd.DataFrame(data=exposures),
                     pd.DataFrame(data=guls),
                     cep,
@@ -1305,7 +1364,7 @@ class LoadFmItems(TestCase):
             write_canonical_files(canonical_accounts=[], canonical_accounts_file_path=accounts_file.name)
 
             with self.assertRaises(OasisException):
-                fm_df, canacc_df = OasisExposuresManager().load_fm_items(
+                fm_df, canacc_df = OasisExposureManager().load_fm_items(
                     pd.DataFrame(data=exposures),
                     pd.DataFrame(data=guls),
                     cep,
@@ -1391,7 +1450,7 @@ class LoadFmItems(TestCase):
             af_copy = os.path.join(af_dir, '{}2'.format(os.path.basename(accounts_file.name)))
             shutil.copy2(accounts_file.name, af_copy)
 
-            fm_items = OasisExposuresManager().load_fm_items(
+            fm_items = OasisExposureManager().load_fm_items(
                 canexp_df,
                 gul_items_df,
                 cep,
@@ -1551,7 +1610,7 @@ class LoadFmItems(TestCase):
             af_copy = os.path.join(af_dir, '{}2'.format(os.path.basename(accounts_file.name)))
             shutil.copy2(accounts_file.name, af_copy)
 
-            fm_items = OasisExposuresManager().load_fm_items(
+            fm_items = OasisExposureManager().load_fm_items(
                 canexp_df,
                 gul_items_df,
                 cep,
@@ -1717,7 +1776,7 @@ class LoadFmItems(TestCase):
             af_copy = os.path.join(af_dir, '{}2'.format(os.path.basename(accounts_file.name)))
             shutil.copy2(accounts_file.name, af_copy)
 
-            fm_items = OasisExposuresManager().load_fm_items(
+            fm_items = OasisExposureManager().load_fm_items(
                 canexp_df,
                 gul_items_df,
                 cep,
@@ -1880,7 +1939,7 @@ class LoadFmItems(TestCase):
             af_copy = os.path.join(af_dir, '{}2'.format(os.path.basename(accounts_file.name)))
             shutil.copy2(accounts_file.name, af_copy)
 
-            fm_items = OasisExposuresManager().load_fm_items(
+            fm_items = OasisExposureManager().load_fm_items(
                 canexp_df,
                 gul_items_df,
                 cep,
@@ -1978,150 +2037,12 @@ class LoadFmItems(TestCase):
             shr = can_it.get(shr_elm) or 0.0
             self.assertEqual(it['share'], shr)
 
-class FMAcceptanceTests(TestCase):
-
-    def setUp(self):
-        self.canexp_profile = copy.deepcopy(canonical_oed_exposures_profile)
-        self.canacc_profile = copy.deepcopy(canonical_oed_accounts_profile)
-        self.unified_can_profile = unified_canonical_fm_profile_by_level_and_term_group(profiles=[self.canexp_profile, self.canacc_profile])
-        self.fm_agg_map = copy.deepcopy(oasis_fm_agg_profile)
-        self.fm_agg_map[4]['FMAggKey'].pop('SublimitRef')
-        self.manager = OasisExposuresManager()
-
-    @pytest.mark.skip(reason='not implemented')
-    def test_fm3(self):
-        pass
-
-    @pytest.mark.skip(reason='not implemented')
-    def test_fm4(self):
-        pass
-
-    @pytest.mark.skip(reason='not implemented')
-    def test_fm5(self):
-        pass
-
-    @pytest.mark.skip(reason='not implemented')
-    def test_fm6(self):
-        pass
-
-    @settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
-    @given(
-        exposures=canonical_oed_exposures_data(
-            from_account_nums=just(1),
-            from_location_perils=just('WTC;WEC;BFR;001'),
-            from_country_codes=just('US'),
-            from_area_codes=just('CA'),
-            from_buildings_tivs=just(1000000),
-            from_buildings_deductibles=just(10000),
-            from_buildings_limits=just(0),
-            from_other_tivs=just(100000),
-            from_other_deductibles=just(5000),
-            from_other_limits=just(0),
-            from_contents_tivs=just(50000),
-            from_contents_deductibles=just(5000),
-            from_contents_limits=just(0),
-            from_bi_tivs=just(20000),
-            from_bi_deductibles=just(0),
-            from_bi_limits=just(0),
-            from_combined_deductibles=just(0),
-            from_combined_limits=just(0),
-            from_site_deductibles=just(0),
-            from_site_limits=just(0),
-            size=2
-        ),
-        accounts=canonical_oed_accounts_data(
-            from_account_nums=just(1),
-            from_portfolio_nums=just(1),
-            from_policy_nums=just(1),
-            from_policy_perils=just('WTC;WEC;BFR;001'),
-            from_sublimit_deductibles=just(0),
-            from_sublimit_limits=just(0),
-            from_account_deductibles=just(50000),
-            from_account_min_deductibles=just(0),
-            from_account_max_deductibles=just(0),
-            from_layer_deductibles=just(0),
-            from_layer_limits=just(2500000),
-            from_layer_shares=just(1),
-            size=1
-        ),
-        keys=keys_data(
-            from_peril_ids=just(1),
-            from_coverage_type_ids=just(1),
-            from_area_peril_ids=just(1),
-            from_vulnerability_ids=just(1),
-            from_statuses=just('success'),
-            from_messages=just('success'),
-            size=8
-        )
-    )
-    def test_fm7(self, exposures, accounts, keys):
-        exposures[1]['buildingtiv'] = 1700000
-        exposures[1]['othertiv'] = 30000
-        exposures[1]['contentstiv'] = 1000000
-        exposures[1]['bitiv'] = 50000
-
-        keys[1]['id'] = keys[2]['id'] = keys[3]['id'] = 1
-        keys[4]['id'] = keys[5]['id'] = keys[6]['id'] = keys[7]['id'] = 2
-
-        keys[4]['coverage_type'] = 1
-        keys[1]['coverage_type'] = keys[5]['coverage_type'] = 2
-        keys[2]['coverage_type'] = keys[6]['coverage_type'] = 3
-        keys[3]['coverage_type'] = keys[7]['coverage_type'] = 4
-
-        keys[4]['area_peril_id'] = keys[5]['area_peril_id'] = keys[6]['area_peril_id'] = keys[7]['area_peril_id'] = 2
-
-        keys[4]['vulnerability_id'] = 1
-        keys[1]['vulnerability_id'] = keys[5]['vulnerability_id'] = 2
-        keys[2]['vulnerability_id'] = keys[6]['vulnerability_id'] = 3
-        keys[3]['vulnerability_id'] = keys[7]['vulnerability_id'] = 4
-
-        with NamedTemporaryFile('w') as ef, NamedTemporaryFile('w') as af, NamedTemporaryFile('w') as kf, TemporaryDirectory() as outdir:
-            write_canonical_oed_files(exposures, ef.name, accounts, af.name)
-            write_keys_files(keys, kf.name)
-
-            gul_items_df, canexp_df = self.manager.load_gul_items(self.canexp_profile, ef.name, kf.name)
-
-            model = fake_model(resources={
-                'canonical_exposures_df': canexp_df,
-                'gul_items_df': gul_items_df,
-                'canonical_exposures_profile': self.canexp_profile,
-                'canonical_accounts_profile': self.canacc_profile,
-                'fm_agg_profile': self.fm_agg_map
-            })
-            omr = model.resources
-            ofp = omr['oasis_files_pipeline']
-
-            ofp.keys_file_path = kf.name
-            ofp.canonical_exposures_file_path = ef.name
-
-            ofp.items_file_path = os.path.join(outdir, 'items.csv')
-            ofp.coverages_file_path = os.path.join(outdir, 'coverages.csv')
-            ofp.gulsummaryxref_file_path = os.path.join(outdir, 'gulsummaryxref.csv')
-
-            gul_files = self.manager.write_gul_files(oasis_model=model)
-
-            for f in gul_files:
-                self.assertTrue(os.path.exists(gul_files[f]))
-
-            ofp.canonical_accounts_file_path = af.name
-            ofp.fm_policytc_file_path = os.path.join(outdir, 'fm_policytc.csv')
-            ofp.fm_profile_file_path = os.path.join(outdir, 'fm_profile.csv')
-            ofp.fm_programme_file_path = os.path.join(outdir, 'fm_programme.csv')
-            ofp.fm_xref_file_path = os.path.join(outdir, 'fm_xref.csv')
-            ofp.fmsummaryxref_file_path = os.path.join(outdir, 'fmsummaryxref.csv')
-
-            fm_files = self.manager.write_fm_files(oasis_model=model)
-
-            for f in fm_files:
-                self.assertTrue(os.path.exists(fm_files[f]))
-
-
 
 class GulFilesGenerationTestCase(TestCase):
 
     def setUp(self):
         self.profile = canonical_exposures_profile
-        self.manager = OasisExposuresManager()
+        self.manager = OasisExposureManager()
 
     def check_items_file(self, gul_items_df, items_file_path):
         expected = tuple(
@@ -2169,7 +2090,7 @@ class FmFilesGenerationTestCase(TestCase):
             profiles=(self.exposures_profile, self.accounts_profile,)
         )
         self.fm_agg_profile = oasis_fm_agg_profile
-        self.manager = OasisExposuresManager()
+        self.manager = OasisExposureManager()
 
     def check_fm_policytc_file(self, fm_items_df, fm_policytc_file_path):
         fm_policytc_df = pd.DataFrame(
@@ -2227,20 +2148,34 @@ class FmFilesGenerationTestCase(TestCase):
             self.assertEqual(expected, result)
 
     def check_fm_programme_file(self, fm_items_df, fm_programme_file_path):
-            fm_aggtree = {
-                key:set(group['agg_id']) for key, group in fm_items_df[['level_id', 'agg_id']].groupby(['level_id'])
-            }
-            levels = sorted(fm_aggtree.keys())
-            fm_aggtree[0] = fm_aggtree[levels[0]]
-            levels = sorted(fm_aggtree.keys())
+            fm_programme_df = pd.DataFrame(
+                pd.concat([fm_items_df[fm_items_df['level_id']==OASIS_FM_LEVELS['coverage']['id']], fm_items_df])[['level_id', 'agg_id']],
+                dtype=int
+            ).reset_index(drop=True)
+
+            num_cov_items = len(fm_items_df[fm_items_df['level_id']==OASIS_FM_LEVELS['coverage']['id']])
+
+            for i in range(num_cov_items):
+                fm_programme_df.at[i, 'level_id'] = 0
+
+            def from_agg_id_to_agg_id(from_level_id, to_level_id):
+                iterator = (
+                    (from_level_it, to_level_it)
+                    for (_,from_level_it), (_, to_level_it) in zip(
+                        fm_programme_df[fm_programme_df['level_id']==from_level_id].iterrows(),
+                        fm_programme_df[fm_programme_df['level_id']==to_level_id].iterrows()
+                    )
+                )
+                for from_level_it, to_level_it in iterator:
+                    yield from_level_it['agg_id'], to_level_id, to_level_it['agg_id']
+
+            levels = list(set(fm_programme_df['level_id']))
 
             data = [
-                (a, second, b) for first, second in zip(levels, levels[1:]) for a, b in (
-                    zip(fm_aggtree[first], fm_aggtree[second]) if (len(fm_aggtree[first]) == len(fm_aggtree[second]) and len(fm_aggtree[first]) > 1) else itertools.product(fm_aggtree[first], [list(fm_aggtree[second])[0]])
-                )
+                (from_agg_id, level_id, to_agg_id) for from_level_id, to_level_id in zip(levels, levels[1:]) for from_agg_id, level_id, to_agg_id in from_agg_id_to_agg_id(from_level_id, to_level_id)
             ]
 
-            fm_programme_df = pd.DataFrame(columns=['from_agg_id', 'level_id', 'to_agg_id'], data=data, dtype=int)
+            fm_programme_df = pd.DataFrame(columns=['from_agg_id', 'level_id', 'to_agg_id'], data=data, dtype=int).drop_duplicates()
 
             expected = tuple(
                 {
@@ -2548,7 +2483,7 @@ class WriteFmFiles(FmFilesGenerationTestCase):
 class StartOasisFilesPipeline(TestCase):
 
     def setUp(self):
-        self.manager = OasisExposuresManager()
+        self.manager = OasisExposureManager()
         self.exposures_profile = canonical_exposures_profile
         self.accounts_profile = canonical_accounts_profile
 

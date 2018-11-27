@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 __all__ = [
-    'OasisExposuresManagerInterface',
-    'OasisExposuresManager'
+    'OasisExposureManagerInterface',
+    'OasisExposureManager'
 ]
 
 import copy
@@ -44,7 +44,7 @@ from .pipeline import OasisFilesPipeline
 from .csv_trans import Translator
 
 
-class OasisExposuresManagerInterface(Interface):  # pragma: no cover
+class OasisExposureManagerInterface(Interface):  # pragma: no cover
     """
     Exposure manager interface
     """
@@ -308,7 +308,7 @@ class OasisExposuresManagerInterface(Interface):  # pragma: no cover
         pass
 
 
-class OasisExposuresManager(implements(OasisExposuresManagerInterface)):
+class OasisExposureManager(implements(OasisExposureManagerInterface)):
 
     def __init__(self, oasis_models=None):
         self.logger = logging.getLogger()
