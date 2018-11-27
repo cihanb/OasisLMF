@@ -46,39 +46,8 @@ from .csv_trans import Translator
 
 class OasisExposuresManagerInterface(Interface):  # pragma: no cover
     """
-    Interface class form managing a collection of exposures.
-
-    :param oasis_models: A list of Oasis model objects with resources provided in the model objects'
-        resources dictionaries.
-    :type oasis_models: ``list(OasisModel)``
+    Exposure manager interface
     """
-
-    def __init__(self, oasis_models=None):
-        """
-        Class constructor.
-
-        :param oasis_models: An optional list of Oasis model objects
-        :type oasis_models: list
-        """
-        pass
-
-    def add_model(self, oasis_model):
-        """
-        Adds Oasis model object to the manager and sets up its resources.
-
-        :param oasis_model: An Oasis model object 
-        :type oasis_model: oasislmf.models.model.OasisModel
-        """
-        pass
-
-    def delete_model(self, oasis_model):
-        """
-        Deletes an existing Oasis model object in the manager.
-
-        :param oasis_model: An Oasis model object 
-        :type oasis_model: oasislmf.models.model.OasisModel
-        """
-        pass
 
     def transform_source_to_canonical(self, oasis_model=None, **kwargs):
         """
@@ -346,44 +315,6 @@ class OasisExposuresManager(implements(OasisExposuresManagerInterface)):
 
         self.logger.debug('Exposures manager {} initialising'.format(self))
 
-        self.logger.debug('Adding models')
-        self._models = {}
-
-        self.add_models(oasis_models)
-
-        self.logger.debug('Exposures manager {} finished initialising'.format(self))
-
-    def add_model(self, oasis_model):
-        """
-        Adds model to the manager and sets up its resources.
-        """
-        self._models[oasis_model.key] = oasis_model
-
-        return oasis_model
-
-    def add_models(self, oasis_models):
-        """
-        Adds a list of Oasis model objects to the manager.
-        """
-        for model in oasis_models or []:
-            self.add_model(model)
-
-    def delete_model(self, oasis_model):
-        """
-        Deletes an existing Oasis model object in the manager.
-        """
-        if oasis_model.key in self._models:
-            oasis_model.resources['oasis_files_pipeline'].clear()
-
-            del self._models[oasis_model.key]
-
-    def delete_models(self, oasis_models):
-        """
-        Deletes a list of existing Oasis model objects in the manager.
-        """
-        for model in oasis_models:
-            self.delete_model(model)
-
     @property
     def keys_lookup_factory(self):
         """
@@ -392,39 +323,6 @@ class OasisExposuresManager(implements(OasisExposuresManagerInterface)):
             :getter: Gets the current keys lookup service factory instance
         """
         return self._keys_lookup_factory
-
-    @property
-    def models(self, key=None):
-        """
-        Model objects dictionary property.
-
-            :getter: Gets the model in the models dict using the optional
-                     ``key`` argument. If ``key`` is not given then the dict
-                     is returned.
-
-            :setter: Sets the value of the optional ``key`` in the models dict
-                     to ``val`` where ``val`` is assumed to be an Oasis model
-                     object (``omdk.OasisModel.OasisModel``).
-
-                     If no ``key`` is given then ``val`` is assumed to be a new
-                     models dict and is used to replace the existing dict.
-
-            :deleter: Deletes the value of the optional ``key`` in the models
-                      dict. If no ``key`` is given then the entire existing
-                      dict is cleared.
-        """
-        return self._models[key] if key else self._models
-
-    @models.setter
-    def models(self, val, key=None):
-        if key:
-            self._models.update({key:val})
-        else:
-            self._models.update(val)
-
-    @models.deleter
-    def models(self):
-        self._models.clear()
 
     def transform_source_to_canonical(self, oasis_model=None, source_type='exposures', **kwargs):
         """
@@ -1698,7 +1596,5 @@ class OasisExposuresManager(implements(OasisExposuresManagerInterface)):
 
         if omr.get('lookup') and omr.get('lookup_config') is None:
             self.load_lookup_config(oasis_model=model)
-
-        self.add_model(model)
 
         return model

@@ -72,63 +72,6 @@ from ..data import (
 )
 
 
-class AddModel(TestCase):
-
-    def test_models_is_empty___model_is_added_to_model_dict(self):
-        model = fake_model('supplier', 'model', 'version')
-
-        manager = OasisExposuresManager()
-        manager.add_model(model)
-
-        self.assertEqual({model.key: model}, manager.models)
-
-    def test_manager_already_contains_a_model_with_the_given_key___model_is_replaced_in_models_dict(self):
-        first = fake_model('supplier', 'model', 'version')
-        second = fake_model('supplier', 'model', 'version')
-
-        manager = OasisExposuresManager(oasis_models=[first])
-        manager.add_model(second)
-
-        self.assertIs(second, manager.models[second.key])
-
-    def test_manager_already_contains_a_diferent_model___model_is_added_to_dict(self):
-        first = fake_model('first', 'model', 'version')
-        second = fake_model('second', 'model', 'version')
-
-        manager = OasisExposuresManager(oasis_models=[first])
-        manager.add_model(second)
-
-        self.assertEqual({
-            first.key: first,
-            second.key: second,
-        }, manager.models)
-
-
-class DeleteModels(TestCase):
-    def test_models_is_not_in_manager___no_model_is_removed(self):
-        manager = OasisExposuresManager([
-            fake_model('supplier', 'model', 'version'),
-            fake_model('supplier2', 'model2', 'version2'),
-        ])
-        expected = manager.models
-
-        manager.delete_models([fake_model('supplier3', 'model3', 'version3')])
-
-        self.assertEqual(expected, manager.models)
-
-    def test_models_exist_in_manager___models_are_removed(self):
-        models = [
-            fake_model('supplier', 'model', 'version'),
-            fake_model('supplier2', 'model2', 'version2'),
-            fake_model('supplier3', 'model3', 'version3'),
-        ]
-
-        manager = OasisExposuresManager(models)
-        manager.delete_models(models[1:])
-
-        self.assertEqual({models[0].key: models[0]}, manager.models)
-
-
 class LoadCanonicalExposuresProfile(TestCase):
     def test_model_and_kwargs_are_not_set___result_is_null(self):
         profile = OasisExposuresManager().load_canonical_exposures_profile()
