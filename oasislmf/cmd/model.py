@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# PYTHON_ARGCOMPLETE_OK
+
 import importlib
 import io
 import json
@@ -7,6 +9,7 @@ import subprocess
 import time
 import sys
 
+import argcomplete
 from argparse import RawDescriptionHelpFormatter
 
 from pathlib2 import Path
@@ -213,6 +216,8 @@ class TransformSourceToCanonicalFileCmd(OasisBaseCommand):
             '-o', '--output-file-path', default=None,
             help='Output file path',
         )
+
+        argcomplete.autocomplete(parser)
 
     def action(self, args):
         """

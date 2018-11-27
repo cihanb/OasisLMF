@@ -1,3 +1,5 @@
+# PYTHON_ARGCOMPLETE_OK
+
 import json
 import logging
 
@@ -6,6 +8,7 @@ import sys
 import os
 import io
 
+import argparsecomplete
 from argparsetree import BaseCommand
 
 from oasislmf.utils.exceptions import OasisException
@@ -106,6 +109,8 @@ class OasisBaseCommand(BaseCommand):
             '-C', '--config', type=PathCleaner('Configuration file', preexists=False),
             help='Command configuration (JSON) file'
         )
+
+        argcomplete.autocomplete(parser)
 
     def parse_args(self):
         """
